@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Condomínio - Reservas</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            'amarelo': '#FCC200',    
+            'marrom': '#5C4033',     
+            'musgo': '#4A5D23',      
+            'fundo': '#F4F1EA'       
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { background-color: #F4F1EA; }
+    .day-btn { padding: 0.5rem; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; transition: all 0.2s; }
+    .day-available:hover { background-color: #fef3c7; color: #5C4033; cursor: pointer; }
+    .day-selected { background-color: #FCC200; color: #5C4033; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .day-blocked { background-color: #fca5a5; color: #7f1d1d; cursor: pointer; opacity: 0.7; }
+    .day-sindico-blocked { background-color: #4A5D23; color: white; cursor: pointer; opacity: 0.9; }
+    .day-past { color: #d1d5db; cursor: not-allowed; }
+    .tab-active { border-bottom: 3px solid #FCC200; color: #FCC200; font-weight: 700; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #5C4033; border-radius: 4px; }
+  </style>
+</head>
+<body class="min-h-screen text-marrom">
+
+  <!-- ================= TELA DE LOGIN ================= -->
+  <section id="auth-screen" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <img loading="lazy" class="absolute inset-0 w-full h-full object-cover z-0" src="capa.jpg" alt="Entrada do Condomínio">
+    <div class="absolute inset-0 bg-black/60 z-0"></div>
+    
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 relative z-10 border-t-8 border-amarelo">
+      <div class="text-center mb-8">
+        <h2 id="authTitle" class="text-3xl font-bold text-marrom">Acessar Sistema</h2>
+        <p id="authSubtitle" class="text-gray-500 mt-2 text-sm">Gerencie suas reservas no condomínio</p>
+      </div>
+
+      <div id="authForm" class="space-y-5">
+        <div id="registerFields" class="hidden space-y-4 bg-fundo p-4 rounded-lg border border-gray-200">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Bloco / Nome</label>
+              <input type="text" id="regName" placeholder="Ex: A / João" class="w-full border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-amarelo outline-none bg-white">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Apartamento</label>
+              <input type="text" id="regUnit" placeholder="Ex: 101" class="w-full border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-amarelo outline-none bg-white">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Tipo de Conta</label>
+            <select id="roleSelect" class="w-full border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-amarelo outline-none bg-white" onchange="toggleSindicoCode()">
+              <option value="morador">Morador</option>
+              <option value="sindico">Síndico / Administração</option>
+            </select>
+          </div>
+          <div id="sindicoCodeField" class="hidden">
+            <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Código de Segurança</label>
+            <input type="password" id="secretCode" placeholder="Requerido para síndico" class="w-full border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-musgo outline-none bg-white">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">E-mail</label>
+          <input type="email" id="email" placeholder="seu@email.com" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Senha</label>
+          <input type="password" id="password" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
+        </div>
+
+        <button id="authBtn" onclick="handleAuth()" class="w-full py-3.5 rounded-lg font-bold text-marrom bg-amarelo hover:bg-yellow-500 shadow-md transition-colors text-lg mt-4">
+          Entrar
+        </button>
+      </div>
+
+      <div class="mt-8 text-center text-sm border-t pt-6">
+        <p id="toggleText" class="text-gray-600">
+          Não tem conta? <button onclick="toggleAuthMode()" class="text-musgo font-bold hover:underline">Cadastre-se</button>
+        </p>
+        <button onclick="resetPassword()" class="text-gray-400 mt-3 hover:text-marrom transition-colors">Esqueci minha senha</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= NAVEGAÇÃO ================= -->
+  <header class="bg-marrom text-white shadow-md sticky top-0 z-40 hidden" id="app-header">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center gap-2">
+        <div class="bg-amarelo p-2 rounded-lg"><i data-lucide="building-2" class="text-marrom w-5 h-5"></i></div>
+        <h1 id="header-title" class="font-bold text-xl tracking-tight">Condomínio</h1>
+      </div>
+      <div class="flex items-center gap-4">
+        <span id="user-greeting" class="text-sm font-medium hidden sm:block text-gray-200"></span>
+        <button onclick="logout()" class="p-2 bg-musgo hover:bg-green-800 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium">
+          <i data-lucide="log-out" class="w-4 h-4"></i> <span class="hidden sm:inline">Sair</span>
+        </button>
+      </div>
+    </div>
+  </header>
+  
+  <main id="main-app" class="hidden max-w-5xl mx-auto p-4 pb-12 mt-6">
+    
+    <!-- ================= VISÃO DO MORADOR ================= -->
+    <section id="view-morador-reservas" class="hidden animate-[fadeIn_0.3s_ease-in-out]">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <div class="lg:col-span-1 space-y-6">
+          <!-- Quadro de Avisos do Síndico -->
+          <div id="notifications-morador" class="hidden bg-amarelo/20 border-l-4 border-amarelo rounded-r-lg p-5">
+            <h3 class="font-bold text-marrom flex items-center gap-2 mb-3"><i data-lucide="bell-ring" class="w-5 h-5"></i> Quadro de Avisos</h3>
+            <div id="notifications-list" class="space-y-3"></div>
+          </div>
+
+          <!-- Minhas Reservas (Com Filtro) -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <div class="flex items-center justify-between mb-4 border-b pb-3">
+              <h3 class="font-bold text-marrom flex items-center gap-2"><i data-lucide="calendar-check" class="w-5 h-5 text-musgo"></i> Minhas Reservas</h3>
+              <select id="filter-my-area" class="border-gray-300 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-amarelo bg-fundo font-medium" onchange="renderMyReservations()"> 
+                <option value="all">Todas as Áreas</option> 
+                <option value="campo_futebol">Campo</option> 
+                <option value="area_comum">Salão</option> 
+              </select>
+            </div>
+            <div id="my-reservations-list" class="space-y-3"></div>
+            <p id="no-my-reservations" class="text-gray-400 text-center py-6 text-sm italic bg-gray-50 rounded-lg">Você não possui reservas futuras.</p>
+          </div>
+
+          <!-- Regras -->
+          <div class="bg-musgo text-white rounded-xl shadow-sm p-5">
+            <h3 class="font-bold flex items-center gap-2 mb-3"><i data-lucide="info" class="w-5 h-5 text-amarelo"></i> Regras de Uso</h3>
+            <ul class="text-sm space-y-2 text-gray-100">
+              <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> Entregue o ambiente limpo.</li>
+              <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> Desligue luzes e freezer.</li>
+              <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> Tranque portões após o uso.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="lg:col-span-2 space-y-6">
+          <!-- Agendar Reserva -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 class="font-bold text-2xl text-marrom mb-6 border-b pb-4">Agendar Área Comum</h2>
+            <form id="reservation-form" class="space-y-6">
+              
+              <div>
+                <label class="block font-bold text-marrom mb-3 uppercase text-xs tracking-wider">1. Selecione o Local</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button type="button" id="card-football" class="rounded-xl overflow-hidden border-2 border-gray-200 cursor-pointer transition-all bg-fundo hover:border-amarelo" onclick="selectArea('campo_futebol')"> 
+                    <img loading="lazy" class="w-full h-32 object-cover" src="campo.jpg" alt="Campo de futebol">
+                    <div class="p-3 bg-white"><span class="font-bold text-marrom uppercase text-xs tracking-wider">Campo de Futebol</span></div>
+                  </button> 
+                  <button type="button" id="card-party" class="rounded-xl overflow-hidden border-2 border-gray-200 cursor-pointer transition-all bg-fundo hover:border-amarelo" onclick="selectArea('area_comum')"> 
+                    <img loading="lazy" class="w-full h-32 object-cover" src="salao.jpg" alt="Área Comum">
+                    <div class="p-3 bg-white"><span class="font-bold text-marrom uppercase text-xs tracking-wider">Salão de Festas</span></div>
+                  </button>
+                </div>
+              </div>
+              
+              <div id="calendar-section" class="hidden">
+                <label class="block font-bold text-marrom mb-3 uppercase text-xs tracking-wider">2. Escolha a Data</label>
+                <div class="bg-fundo rounded-xl p-4 border border-gray-200">
+                  <div class="flex items-center justify-between mb-4 bg-white rounded-lg p-2 shadow-sm border border-gray-100">
+                    <button type="button" onclick="changeMonth(-1)" class="p-2 hover:bg-gray-100 rounded-md transition-colors"><i data-lucide="chevron-left" class="w-5 h-5 text-marrom"></i></button> 
+                    <span id="cal-month-year" class="font-bold text-marrom capitalize"></span> 
+                    <button type="button" onclick="changeMonth(1)" class="p-2 hover:bg-gray-100 rounded-md transition-colors"><i data-lucide="chevron-right" class="w-5 h-5 text-marrom"></i></button>
+                  </div>
+                  <div class="grid grid-cols-7 text-center text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">
+                    <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+                  </div>
+                  <div id="cal-days" class="grid grid-cols-7 text-center gap-1.5"></div>
+                </div>
+              </div>
+              
+              <div id="time-slot-section" class="hidden">
+                <label class="block font-bold text-marrom mb-3 uppercase text-xs tracking-wider">3. Defina o Horário</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-fundo p-4 rounded-xl border border-gray-200">
+                  <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Início</label> 
+                    <select id="start-time-select" class="w-full border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amarelo outline-none bg-white font-medium"> 
+                      <option value="">Selecione...</option> 
+                      <option value="08">08:00</option><option value="09">09:00</option><option value="10">10:00</option><option value="11">11:00</option><option value="12">12:00</option><option value="13">13:00</option><option value="14">14:00</option><option value="15">15:00</option><option value="16">16:00</option><option value="17">17:00</option><option value="18">18:00</option><option value="19">19:00</option><option value="20">20:00</option><option value="21">21:00</option><option value="22">22:00</option><option value="23">23:00</option><option value="00">00:00 (meia-noite)</option> 
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Término</label> 
+                    <!-- Cursor not allowed removido e ajustado -->
+                    <select id="end-time-select" disabled class="w-full border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amarelo outline-none bg-white font-medium disabled:opacity-50"> 
+                      <option value="">Selecione o Início primeiro</option> 
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="w-full py-4 rounded-xl font-bold transition-all bg-amarelo text-marrom hover:bg-yellow-500 shadow-lg hover:shadow-xl text-lg flex justify-center items-center gap-2">
+                <i data-lucide="calendar-plus" class="w-5 h-5"></i> Confirmar Reserva
+              </button>
+            </form>
+          </div>
+
+          <!-- Contato com a Administração -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 class="font-bold text-marrom mb-4 flex items-center gap-2"><i data-lucide="message-square" class="w-5 h-5 text-musgo"></i> Falar com a Administração</h3>
+            <form id="morador-notification-form" class="space-y-3">
+              <textarea id="morador-message" placeholder="Escreva sua solicitação ou aviso (Exclusivo para o Síndico)..." class="w-full border border-gray-300 rounded-lg px-4 py-3 min-h-[100px] focus:ring-2 focus:ring-musgo outline-none bg-fundo resize-none" required></textarea> 
+              <button type="submit" class="px-6 py-2.5 rounded-lg font-bold bg-marrom text-white hover:bg-opacity-90 transition-colors ml-auto block">Enviar Mensagem</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- ================= VISÃO EXCLUSIVA DO SÍNDICO ================= -->
+    <section id="view-sindico" class="hidden space-y-6 animate-[fadeIn_0.3s_ease-in-out]">
+      
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Gestão de Reservas (Com Filtro Duplo) -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col h-full">
+          <div class="mb-4 border-b pb-4">
+            <h3 class="font-bold text-lg text-marrom flex items-center gap-2 mb-3"><i data-lucide="database" class="w-5 h-5 text-musgo"></i> Gestão de Reservas</h3>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <select id="filter-area" class="w-full border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amarelo bg-fundo font-medium" onchange="renderReservations()"> 
+                <option value="all">Todas as Áreas</option> 
+                <option value="campo_futebol">Campo de Futebol</option> 
+                <option value="area_comum">Salão de Festas</option> 
+              </select>
+              <select id="filter-resident" class="w-full border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amarelo bg-fundo font-medium" onchange="renderReservations()">
+                <option value="all">Todos os Moradores</option>
+              </select>
+            </div>
+          </div>
+          <div id="reservations-list" class="space-y-3 flex-1 overflow-y-auto max-h-[400px] pr-2"></div>
+          <p id="no-reservations" class="text-gray-400 text-center py-12 hidden italic bg-fundo rounded-lg mt-2">Nenhuma reserva localizada.</p>
+        </div>
+
+        <div class="space-y-6 flex flex-col h-full">
+          
+          <!-- Painel de Disparo de Mensagem -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 class="font-bold text-lg text-marrom flex items-center gap-2 mb-4"><i data-lucide="megaphone" class="w-5 h-5 text-amarelo"></i> Enviar Mensagem / Aviso</h3>
+            <div class="flex flex-col gap-3">
+              <select id="notification-target" class="w-full border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-amarelo outline-none bg-fundo font-medium">
+                <option value="all">Mural Geral (Todos os Moradores)</option>
+              </select>
+              <textarea id="notification-input" placeholder="Escreva a mensagem..." class="w-full border-gray-300 rounded-lg px-4 py-3 min-h-[80px] focus:ring-2 focus:ring-amarelo outline-none bg-fundo resize-none"></textarea> 
+              
+              <div class="flex items-center justify-between mt-1">
+                <label class="flex items-center gap-2 text-sm text-marrom font-medium cursor-pointer">
+                  <input type="checkbox" id="notification-important" class="w-4 h-4 text-amarelo focus:ring-amarelo border-gray-300 rounded cursor-pointer">
+                  Marcar como Importante
+                </label>
+                <button type="button" class="px-6 py-2.5 rounded-lg font-bold bg-amarelo text-marrom hover:bg-yellow-500 shadow-sm" onclick="sendNotification()">Enviar</button>
+              </div>
+            </div>
+            <div id="sent-notifications-list" class="space-y-2 mt-4 max-h-32 overflow-y-auto pr-2"></div>
+          </div>
+
+          <!-- Caixa de Entrada do Síndico -->
+          <div class="bg-marrom rounded-xl shadow-sm p-6 text-white flex-1">
+            <h3 class="font-bold text-lg flex items-center gap-2 mb-4"><i data-lucide="inbox" class="w-5 h-5 text-amarelo"></i> Mensagens Recebidas</h3>
+            <div id="morador-messages-list" class="space-y-3 max-h-[250px] overflow-y-auto pr-2"></div>
+            <p id="no-morador-messages" class="text-gray-300 text-center py-6 text-sm bg-white/10 rounded-lg">Nenhuma solicitação nova.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bloqueio de Datas -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h3 class="font-bold text-lg text-marrom flex items-center gap-2 mb-4"><i data-lucide="lock" class="w-5 h-5 text-red-500"></i> Bloquear Datas (Manutenção / Limpeza)</h3>
+        <div class="mb-4 max-w-sm">
+          <select id="block-area-select" class="w-full border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-musgo bg-fundo font-medium" onchange="renderBlockCalendar()"> 
+            <option value="">Selecione a área para bloquear...</option> 
+            <option value="campo_futebol">Campo de Futebol</option> 
+            <option value="area_comum">Salão de Festas</option> 
+          </select>
+        </div>
+        <div id="block-calendar-section" class="hidden max-w-sm bg-fundo p-4 rounded-xl border border-gray-200">
+          <div class="flex items-center justify-between mb-4 bg-white rounded-lg p-2 shadow-sm border border-gray-100">
+            <button type="button" onclick="changeBlockMonth(-1)" class="p-2 hover:bg-gray-100 rounded-md"><i data-lucide="chevron-left" class="w-5 h-5 text-marrom"></i></button> 
+            <span id="block-cal-month-year" class="font-bold text-marrom capitalize"></span> 
+            <button type="button" onclick="changeBlockMonth(1)" class="p-2 hover:bg-gray-100 rounded-md"><i data-lucide="chevron-right" class="w-5 h-5 text-marrom"></i></button>
+          </div>
+          <div class="grid grid-cols-7 text-center text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">
+            <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+          </div>
+          <div id="block-cal-days" class="grid grid-cols-7 text-center gap-1.5"></div>
+          <p class="text-xs text-gray-500 mt-4 text-center"><i data-lucide="info" class="w-3 h-3 inline"></i> Clique no dia para ativar o bloqueio com mensagem.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    // ==========================================
+    // CHAVES DO SUPABASE
+    // ==========================================
+    const RAW_URL = 'https://actjebemorhmsiojgmaf.supabase.co'; 
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjdGplYmVtb3JobXNpb2pnbWFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNjc3NjksImV4cCI6MjEwMjg0Mzc2OX0.iOtD3VHRh4dVc4xy8bBNADgFDA5sGUF77FUQB-3UUhs';
+
+    let cleanUrl = RAW_URL.trim();
+    if (cleanUrl.includes('/rest/v1')) cleanUrl = cleanUrl.split('/rest/v1')[0];
+    if (cleanUrl.includes('/graphql/v1')) cleanUrl = cleanUrl.split('/graphql/v1')[0];
+    if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
+    const supabaseClient = supabase.createClient(cleanUrl, SUPABASE_KEY);
+
+    let isLoginMode = true;
+    let currentUser = null; 
+    let currentResident = null;
+    let allProfiles = []; // Para popular a lista de moradores do síndico
+
+    // ==========================================
+    // ALERTAS FLUTUANTES (TOAST 5 SEGUNDOS)
+    // ==========================================
+    function showToast(msg, isError = false) {
+      const toast = document.createElement('div');
+      toast.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg font-bold text-white z-50 animate-[fadeIn_0.3s_ease-in-out] ${isError ? 'bg-red-500' : 'bg-musgo'}`;
+      toast.innerHTML = `<div class="flex items-center gap-2"><i data-lucide="${isError ? 'alert-circle' : 'check-circle'}" class="w-5 h-5"></i> ${esc(msg)}</div>`;
+      document.body.appendChild(toast);
+      lucide.createIcons({root: toast});
+      setTimeout(() => { toast.remove(); }, 5000);
+    }
+
+    function toggleAuthMode() {
+      isLoginMode = !isLoginMode;
+      document.getElementById('authTitle').innerText = isLoginMode ? 'Acessar Sistema' : 'Nova Conta';
+      document.getElementById('authSubtitle').innerText = isLoginMode ? 'Gerencie suas reservas no condomínio' : 'Registre-se como morador ou síndico';
+      document.getElementById('authBtn').innerText = isLoginMode ? 'Entrar' : 'Confirmar Cadastro';
+      document.getElementById('registerFields').classList.toggle('hidden', isLoginMode);
+      document.getElementById('toggleText').innerHTML = isLoginMode ? 
+        'Não tem conta? <button onclick="toggleAuthMode()" class="text-musgo font-bold hover:underline">Cadastre-se</button>' : 
+        'Já tem conta? <button onclick="toggleAuthMode()" class="text-musgo font-bold hover:underline">Fazer Login</button>';
+    }
+
+    function toggleSindicoCode() {
+      const isSindico = document.getElementById('roleSelect').value === 'sindico';
+      document.getElementById('sindicoCodeField').classList.toggle('hidden', !isSindico);
+    }
+
+    async function handleAuth() {
+      try {
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const btn = document.getElementById('authBtn');
+
+        if (!email || !password) { showToast('Preencha E-mail e Senha.', true); return; }
+        if (password.length < 6) { showToast('A senha precisa ter pelo menos 6 caracteres.', true); return; }
+        btn.disabled = true; btn.innerText = 'Aguarde...';
+
+        if (isLoginMode) {
+          const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+          if (error) { showToast('Erro ao entrar: ' + error.message, true); btn.disabled = false; btn.innerText = 'Entrar'; }
+        } else {
+          const name = document.getElementById('regName').value.trim();
+          const unit = document.getElementById('regUnit').value.trim();
+          const role = document.getElementById('roleSelect').value;
+          const secret = document.getElementById('secretCode').value;
+
+          if (!name || !unit) { showToast('Preencha Bloco/Nome e Apartamento.', true); btn.disabled = false; btn.innerText = 'Confirmar Cadastro'; return; }
+          if (role === 'sindico' && secret !== 'CONDOMINIO2026') { showToast('Código de síndico inválido!', true); btn.disabled = false; btn.innerText = 'Confirmar Cadastro'; return; }
+
+          const { data, error } = await supabaseClient.auth.signUp({ 
+            email, password, options: { data: { nome: name, unidade: unit, role: role } }
+          });
+
+          if (error) {
+            showToast('Erro no cadastro: ' + error.message, true); btn.disabled = false; btn.innerText = 'Confirmar Cadastro';
+          } else {
+            if (data.user) { await supabaseClient.from('profiles').update({ bloco: name, apartamento: unit, role: role }).eq('id', data.user.id); }
+            window.location.reload(); 
+          }
+        }
+      } catch(e) {
+        document.getElementById('authBtn').disabled = false;
+        document.getElementById('authBtn').innerText = isLoginMode ? 'Entrar' : 'Confirmar Cadastro';
+      }
+    }
+
+    async function resetPassword() {
+      const email = document.getElementById('email').value.trim();
+      if (!email) { showToast('Digite seu e-mail no campo acima.', true); return; }
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+      if (error) showToast(error.message, true); else showToast('E-mail de recuperação enviado!');
+    }
+
+    async function logout() { await supabaseClient.auth.signOut(); window.location.reload(); }
+
+    async function initApp(session) {
+      currentUser = session.user;
+      const meta = currentUser.user_metadata || {};
+      
+      let dbRole = meta.role || 'morador';
+      let dbName = meta.nome || 'Morador';
+      let dbUnit = meta.unidade || '---';
+
+      try {
+        const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', currentUser.id).single();
+        if (profile) {
+          if (profile.role) dbRole = profile.role;
+          if (profile.bloco) dbName = profile.bloco;
+          if (profile.apartamento) dbUnit = profile.apartamento;
+        }
+      } catch(e) {}
+
+      currentResident = { name: dbName, unit: dbUnit, role: dbRole };
+      
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app-header').classList.remove('hidden');
+      document.getElementById('main-app').classList.remove('hidden');
+      document.getElementById('user-greeting').innerText = `${currentResident.name} (Ap. ${currentResident.unit})`;
+
+      const vMorador = document.getElementById('view-morador-reservas');
+      const vSindico = document.getElementById('view-sindico');
+      const hTitle = document.getElementById('header-title');
+
+      if (currentResident.role === 'sindico') {
+        hTitle.innerText = 'Painel da Administração';
+        vMorador.classList.add('hidden');
+        vSindico.classList.remove('hidden'); vSindico.classList.add('block');
+      } else {
+        hTitle.innerText = 'Área do Morador';
+        vSindico.classList.add('hidden');
+        vMorador.classList.remove('hidden'); vMorador.classList.add('block');
+      }
+
+      await window.dataSdk.init(dataHandler);
+    }
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (session) { initApp(session); } else {
+        document.getElementById('auth-screen').classList.remove('hidden');
+        document.getElementById('app-header').classList.add('hidden');
+        document.getElementById('main-app').classList.add('hidden');
+      }
+    });
+
+    // ==========================================
+    // DADOS E LOGICA
+    // ==========================================
+    let allData = [];
+    let selectedArea = null; let selectedDate = null;
+    let calYear, calMonth, blockCalYear, blockCalMonth;
+    const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const now = new Date(); calYear = blockCalYear = now.getFullYear(); calMonth = blockCalMonth = now.getMonth();
+
+    function getTableName(type) {
+      const map = { 'reservation': 'reservations', 'morador_notification': 'morador_notifications', 'notification': 'notifications', 'date_block': 'date_blocks' };
+      return map[type];
+    }
+
+    window.dataSdk = {
+      init: async (handler) => { 
+        if (!supabaseClient) return;
+        try {
+            const [ { data: resvs }, { data: mNotifs }, { data: notifs }, { data: blocks }, { data: profiles } ] = await Promise.all([
+              supabaseClient.from('reservations').select('*'),
+              supabaseClient.from('morador_notifications').select('*'),
+              supabaseClient.from('notifications').select('*'),
+              supabaseClient.from('date_blocks').select('*'),
+              supabaseClient.from('profiles').select('*')
+            ]);
+            let combined = [];
+            if(resvs) combined.push(...resvs.map(d => ({...d, type: 'reservation'})));
+            if(mNotifs) combined.push(...mNotifs.map(d => ({...d, type: 'morador_notification'})));
+            if(notifs) combined.push(...notifs.map(d => ({...d, type: 'notification'})));
+            if(blocks) combined.push(...blocks.map(d => ({...d, type: 'date_block'})));
+            if(profiles) allProfiles = profiles;
+
+            handler.onDataChanged(combined);
+        } catch(e) {}
+      },
+      create: async (data) => { 
+        try {
+            const table = getTableName(data.type); const insertData = { ...data }; delete insertData.type; delete insertData.id; 
+            const { error } = await supabaseClient.from(table).insert([insertData]);
+            if(error) return { isOk: false };
+            await window.dataSdk.init(dataHandler); return { isOk: true }; 
+        } catch (e) { return { isOk: false }; }
+      },
+      update: async (data) => { 
+        try {
+            const table = getTableName(data.type); const updateData = { ...data }; delete updateData.type;
+            const { error } = await supabaseClient.from(table).update(updateData).eq('id', data.id);
+            if(error) return { isOk: false };
+            await window.dataSdk.init(dataHandler); return { isOk: true }; 
+        } catch(e) { return { isOk: false }; }
+      },
+      delete: async (data) => { 
+        try {
+            const table = getTableName(data.type);
+            const { error } = await supabaseClient.from(table).delete().eq('id', data.id);
+            if(error) return { isOk: false };
+            await window.dataSdk.init(dataHandler); return { isOk: true }; 
+        } catch(e) { return { isOk: false }; }
+      }
+    };
+
+    function getData(type) { return allData.filter(r => r.type === type); }
+    function getReservations() { return getData('reservation'); }
+    function getNotifications() { return getData('notification'); }
+    function getDateBlocks() { return getData('date_block'); }
+
+    const dataHandler = {
+      onDataChanged(data) {
+        allData = data;
+        renderCalendar(); renderMoradorNotifications(); renderMyReservations();
+        if (currentResident && currentResident.role === 'sindico') {
+          renderMoradorMessages(); renderReservations(); renderSentNotifications(); renderBlockCalendar();
+          updateSindicoFilters();
+        }
+      }
+    };
+
+    // ==========================================
+    // FUNÇÕES DO MORADOR
+    // ==========================================
+    function renderMyReservations() {
+      if (!currentResident || currentResident.role !== 'morador') return;
+      const list = document.getElementById('my-reservations-list'); const noMsg = document.getElementById('no-my-reservations');
+      const filter = document.getElementById('filter-my-area').value;
+      
+      let mine = getReservations().filter(r => r.resident_name === currentResident.name && r.resident_unit === currentResident.unit);
+      if (filter !== 'all') mine = mine.filter(r => r.area === filter);
+      
+      mine.sort((a,b) => (a.date||'').localeCompare(b.date||''));
+      list.innerHTML = ''; noMsg.classList.toggle('hidden', mine.length > 0);
+      mine.forEach(r => {
+        const areaLabel = r.area === 'campo_futebol' ? 'Campo de Futebol' : 'Salão de Festas';
+        const dateFormatted = (r.date||'').split('-').reverse().join('/');
+        const div = document.createElement('div');
+        div.className = 'bg-fundo border border-gray-200 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3';
+        div.innerHTML = `<div><p class="font-bold text-marrom flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-musgo"></i> ${esc(areaLabel)}</p><p class="text-sm text-gray-600 mt-1"><i data-lucide="calendar" class="w-3 h-3 inline"></i> ${dateFormatted} • <i data-lucide="clock" class="w-3 h-3 inline"></i> ${r.time}</p></div><button type="button" class="text-red-500 font-semibold text-sm hover:text-red-700 px-3 py-1.5 rounded transition-colors" onclick="deleteResv('${r.id}')">Cancelar</button>`;
+        list.appendChild(div);
+      });
+      lucide.createIcons({root: list});
+    }
+
+    async function deleteResv(id) {
+      if (confirm('Deseja realmente cancelar esta reserva?')) {
+        const resv = getReservations().find(r => r.id === id);
+        if(resv) await window.dataSdk.delete(resv);
+      }
+    }
+
+    function renderMoradorNotifications() {
+      const list = document.getElementById('notifications-list'); const section = document.getElementById('notifications-morador');
+      const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
+      
+      // Filtra mensagens direcionadas a mim OU para todos (e que não foram deletadas por mim)
+      const notifs = getNotifications().filter(n => {
+        const isForMe = !n.target || n.target === 'all' || n.target === myIdStr;
+        const isDismissed = n.dismissed_by && n.dismissed_by.includes(`[${myIdStr}]`);
+        return isForMe && !isDismissed;
+      });
+
+      if (!notifs.length) { section.classList.add('hidden'); return; }
+      section.classList.remove('hidden'); list.innerHTML = '';
+      
+      [...notifs].sort((a,b) => (b.created_at||'').localeCompare(a.created_at||'')).forEach(n => {
+        const div = document.createElement('div'); div.className = 'bg-white rounded p-3 text-sm shadow-sm border border-amarelo/30 relative';
+        
+        let deleteHtml = '';
+        // Só exibe o botão de deletar se o síndico NÃO marcou como importante
+        if (!n.is_important) {
+           deleteHtml = `<button class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Apagar aviso" onclick="deleteMoradorNotif('${n.id}', '${n.target}')"><i data-lucide="x" class="w-4 h-4"></i></button>`;
+        }
+        
+        div.innerHTML = `${deleteHtml}<p class="text-marrom font-medium pr-6">${esc(n.message)}</p><p class="text-xs text-gray-500 mt-1.5">${new Date(n.created_at).toLocaleString('pt-BR')}</p>`;
+        list.appendChild(div);
+      });
+      lucide.createIcons({root: list});
+    }
+
+    async function deleteMoradorNotif(id, target) {
+      const n = getNotifications().find(x => x.id === id);
+      if(!n) return;
+      
+      if (!target || target === 'all') {
+        // Aviso Geral: Apenas marca como escondido para ESTE morador
+        const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
+        await window.dataSdk.update({ type: 'notification', id: n.id, dismissed_by: (n.dismissed_by || '') + `[${myIdStr}]` });
+      } else {
+        // Aviso Individual: Deleta do banco
+        await window.dataSdk.delete({ type: 'notification', id: n.id });
+      }
+    }
+
+    document.getElementById('morador-notification-form').addEventListener('submit', async (e) => {
+      e.preventDefault(); const message = document.getElementById('morador-message').value.trim();
+      const btn = e.target.querySelector('button'); btn.disabled = true; btn.innerText = 'Enviando...';
+      const result = await window.dataSdk.create({ type: 'morador_notification', resident_name: currentResident.name, resident_unit: currentResident.unit, message: message, created_at: new Date().toISOString() });
+      btn.disabled = false; btn.innerText = 'Enviar Mensagem';
+      if (result.isOk) { document.getElementById('morador-message').value = ''; showToast('Mensagem enviada com sucesso para a administração!'); }
+    });
+
+    // ==========================================
+    // CALENDÁRIO E RESERVA
+    // ==========================================
+    function selectArea(area) {
+      selectedArea = area; selectedDate = null;
+      document.getElementById('card-football').classList.toggle('border-amarelo', area === 'campo_futebol');
+      document.getElementById('card-party').classList.toggle('border-amarelo', area === 'area_comum');
+      document.getElementById('calendar-section').classList.remove('hidden');
+      document.getElementById('time-slot-section').classList.add('hidden');
+      renderCalendar();
+    }
+
+    document.getElementById('start-time-select').addEventListener('change', function() {
+      const startHour = this.value; const endSelect = document.getElementById('end-time-select');
+      endSelect.innerHTML = '<option value="">Selecione...</option>';
+      if (!startHour) { endSelect.disabled = true; return; }
+      for (let h = parseInt(startHour) + 1; h <= 23; h++) { endSelect.appendChild(new Option(String(h).padStart(2, '0') + ':00', String(h).padStart(2, '0'))); }
+      endSelect.appendChild(new Option('00:00 (meia-noite)', '00')); endSelect.disabled = false;
+    });
+
+    function changeMonth(dir) { calMonth += dir; if (calMonth > 11) { calMonth = 0; calYear++; } if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); }
+
+    function renderCalendar() {
+      if(!document.getElementById('cal-month-year')) return;
+      document.getElementById('cal-month-year').textContent = `${MONTHS[calMonth]} ${calYear}`;
+      const container = document.getElementById('cal-days'); container.innerHTML = '';
+      const firstDay = new Date(calYear, calMonth, 1).getDay(); const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+      const today = new Date(); today.setHours(0,0,0,0);
+      const reservedDates = new Set(); getReservations().filter(r => r.area === selectedArea).forEach(r => { if (r.date) reservedDates.add(r.date); });
+      const blockedDates = new Set(); getDateBlocks().filter(b => b.area === selectedArea).forEach(b => { if (b.date) blockedDates.add(b.date); });
+
+      for (let i = 0; i < firstDay; i++) container.appendChild(document.createElement('span'));
+      for (let d = 1; d <= daysInMonth; d++) {
+        const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = d; btn.className = 'day-btn';
+        const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const dateObj = new Date(calYear, calMonth, d);
+        if (dateObj < today) { btn.classList.add('day-past'); btn.disabled = true; }
+        else if (reservedDates.has(dateStr)) { 
+          btn.classList.add('day-blocked'); btn.disabled = true; 
+        }
+        else if (blockedDates.has(dateStr)) { 
+          btn.classList.add('day-sindico-blocked'); 
+          btn.onclick = () => { 
+            const blockObj = getDateBlocks().find(b => b.area === selectedArea && b.date === dateStr);
+            const motivo = (blockObj && blockObj.message) ? blockObj.message : "Data bloqueada pela administração para manutenção.";
+            showToast(motivo, true);
+          }; 
+        }
+        else {
+          btn.classList.add('day-available', 'border', 'border-gray-200', 'bg-white');
+          btn.onclick = () => { selectedDate = dateStr; document.getElementById('time-slot-section').classList.remove('hidden'); renderCalendar(); };
+        }
+        if (selectedDate === dateStr) { btn.className = 'day-btn day-selected'; }
+        container.appendChild(btn);
+      }
+    }
+
+    function hasTimeConflict(area, date, startHour, endHour) {
+      const existing = getReservations().filter(r => r.area === area && r.date === date);
+      for (const res of existing) {
+        if (!res.time) continue;
+        const parts = res.time.split('–');
+        if (parts.length < 2) continue;
+        if (startHour < parseInt(parts[1].split(':')[0]) && endHour > parseInt(parts[0].split(':')[0])) return true;
+      }
+      return false;
+    }
+
+    document.getElementById('reservation-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (!selectedArea || !selectedDate) { showToast('Selecione área e data no calendário.', true); return; }
+      const sH = document.getElementById('start-time-select').value; const eH = document.getElementById('end-time-select').value;
+      if (!sH || !eH) { showToast('Defina o horário de início e término.', true); return; }
+      if (hasTimeConflict(selectedArea, selectedDate, parseInt(sH), parseInt(eH))) { showToast('Este horário conflita com outra reserva no sistema.', true); return; }
+
+      const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true; btn.innerHTML = 'Salvando...';
+      const timeStr = `${sH}:00–${eH === '00' ? '00:00' : eH + ':00'}`;
+      const result = await window.dataSdk.create({ type: 'reservation', area: selectedArea, date: selectedDate, time: timeStr, resident_name: currentResident.name, resident_unit: currentResident.unit, created_at: new Date().toISOString() });
+      btn.disabled = false; btn.innerHTML = '<i data-lucide="calendar-plus" class="w-5 h-5"></i> Confirmar Reserva'; lucide.createIcons();
+      
+      if (result.isOk) {
+        showToast('Reserva agendada com sucesso!');
+        selectedDate = null; selectedArea = null;
+        document.getElementById('start-time-select').value = ''; document.getElementById('end-time-select').value = '';
+        
+        // Recolhe o calendário (Requisição)
+        document.getElementById('calendar-section').classList.add('hidden');
+        document.getElementById('time-slot-section').classList.add('hidden');
+        document.getElementById('card-football').classList.remove('border-amarelo');
+        document.getElementById('card-party').classList.remove('border-amarelo');
+        
+        renderCalendar();
+      }
+    });
+
+    // ==========================================
+    // FUNÇÕES DO SÍNDICO
+    // ==========================================
+    function updateSindicoFilters() {
+      // Atualiza lista de moradores para notificação
+      const notifSelect = document.getElementById('notification-target');
+      const valNotif = notifSelect.value;
+      notifSelect.innerHTML = '<option value="all">Mural Geral (Todos os Moradores)</option>';
+      
+      // Atualiza filtro de moradores na tabela de reservas
+      const filterSelect = document.getElementById('filter-resident');
+      const valFilter = filterSelect.value;
+      filterSelect.innerHTML = '<option value="all">Todos os Moradores</option>';
+
+      const moradoresProfiles = allProfiles.filter(p => p.role === 'morador');
+      moradoresProfiles.forEach(p => {
+        const label = `${p.bloco} - Ap. ${p.apartamento}`;
+        notifSelect.appendChild(new Option(`Para: ${label}`, label));
+        filterSelect.appendChild(new Option(label, label));
+      });
+      notifSelect.value = valNotif || 'all';
+      filterSelect.value = valFilter || 'all';
+    }
+
+    function renderMoradorMessages() {
+      const list = document.getElementById('morador-messages-list'); const noMsg = document.getElementById('no-morador-messages');
+      const msgs = getData('morador_notification'); list.innerHTML = ''; noMsg.classList.toggle('hidden', msgs.length > 0);
+      msgs.forEach(msg => {
+        const div = document.createElement('div'); div.className = 'bg-white/10 rounded-lg p-3 border border-white/20';
+        div.innerHTML = `<div class="flex justify-between items-start mb-2"><p class="font-bold text-sm text-amarelo">${esc(msg.resident_name)} (Ap. ${esc(msg.resident_unit)})</p><button class="text-gray-300 hover:text-red-400" onclick="deleteObj('morador_notification', '${msg.id}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div><p class="text-sm">${esc(msg.message)}</p>`;
+        list.appendChild(div);
+      });
+      lucide.createIcons({root: list});
+    }
+
+    function renderReservations() {
+      const filterArea = document.getElementById('filter-area').value; 
+      const filterRes = document.getElementById('filter-resident').value; 
+      const list = document.getElementById('reservations-list');
+      
+      let filtered = getReservations(); 
+      if (filterArea !== 'all') filtered = filtered.filter(r => r.area === filterArea);
+      if (filterRes !== 'all') filtered = filtered.filter(r => `${r.resident_name} - Ap. ${r.resident_unit}` === filterRes);
+      
+      filtered.sort((a,b) => (a.date||'').localeCompare(b.date||'')); list.innerHTML = ''; document.getElementById('no-reservations').classList.toggle('hidden', filtered.length > 0);
+      filtered.forEach(r => {
+        const div = document.createElement('div'); div.className = 'bg-fundo border border-gray-200 rounded p-3 flex justify-between items-center';
+        div.innerHTML = `<div><p class="font-bold text-sm text-marrom"><i data-lucide="user" class="w-3 h-3 text-musgo inline"></i> ${esc(r.resident_name)} (Ap. ${esc(r.resident_unit)})</p><p class="text-xs text-gray-500 mt-1">${r.area === 'campo_futebol' ? 'Campo' : 'Salão'} • ${(r.date||'').split('-').reverse().join('/')} • ${r.time}</p></div><button class="text-red-500 hover:bg-red-50 p-1 rounded" onclick="deleteObj('reservation', '${r.id}')"><i data-lucide="x-circle" class="w-5 h-5"></i></button>`;
+        list.appendChild(div);
+      });
+      lucide.createIcons({root: list});
+    }
+
+    function sendNotification() {
+      const msg = document.getElementById('notification-input').value.trim(); 
+      if (!msg) return;
+      
+      const target = document.getElementById('notification-target').value;
+      const isImportant = document.getElementById('notification-important').checked;
+      
+      window.dataSdk.create({ 
+        type: 'notification', 
+        message: msg, 
+        target: target,
+        is_important: isImportant,
+        created_at: new Date().toISOString() 
+      }).then((result) => { 
+        if (result.isOk) {
+          // Só limpa e mostra sucesso SE o banco confirmar
+          document.getElementById('notification-input').value = ''; 
+          document.getElementById('notification-important').checked = false;
+          showToast('Aviso publicado com sucesso!');
+        } else {
+          // Se o banco barrar, avisa o erro
+          showToast('Erro: O banco de dados recusou a gravação. Verifique o RLS.', true);
+        }
+      });
+    }
+
+    function renderSentNotifications() {
+      const list = document.getElementById('sent-notifications-list'); list.innerHTML = '';
+      getNotifications().forEach(n => {
+        const div = document.createElement('div'); div.className = 'bg-amarelo/20 border border-amarelo/40 rounded p-3 text-sm flex justify-between items-center gap-2';
+        const impIcon = n.is_important ? '<i data-lucide="alert-circle" class="w-4 h-4 text-red-500 inline mr-1" title="Importante"></i>' : '';
+        const targetLabel = n.target && n.target !== 'all' ? `<br><span class="text-xs text-gray-500">${n.target}</span>` : '';
+        div.innerHTML = `<div>${impIcon}<span class="text-marrom font-medium">${esc(n.message)}</span>${targetLabel}</div><button class="text-red-500 hover:text-red-700" onclick="deleteObj('notification', '${n.id}')"><i data-lucide="trash" class="w-4 h-4"></i></button>`;
+        list.appendChild(div);
+      });
+      lucide.createIcons({root: list});
+    }
+
+    function renderBlockCalendar() {
+      const area = document.getElementById('block-area-select').value; const section = document.getElementById('block-calendar-section');
+      if (!area) { section.classList.add('hidden'); return; } section.classList.remove('hidden');
+      document.getElementById('block-cal-month-year').textContent = `${MONTHS[blockCalMonth]} ${blockCalYear}`;
+      const container = document.getElementById('block-cal-days'); container.innerHTML = '';
+      const firstDay = new Date(blockCalYear, blockCalMonth, 1).getDay(); const daysInMonth = new Date(blockCalYear, blockCalMonth + 1, 0).getDate();
+      const blockedSet = new Set(); getDateBlocks().filter(b => b.area === area).forEach(b => { if (b.date) blockedSet.add(b.date); });
+
+      for (let i = 0; i < firstDay; i++) container.appendChild(document.createElement('span'));
+      for (let d = 1; d <= daysInMonth; d++) {
+        const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = d; btn.className = 'day-btn';
+        const dateStr = `${blockCalYear}-${String(blockCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        if (blockedSet.has(dateStr)) {
+          btn.classList.add('day-sindico-blocked', 'ring-2', 'ring-offset-1', 'ring-musgo');
+          btn.onclick = () => { const bRecord = getDateBlocks().find(b => b.area === area && b.date === dateStr); if(bRecord) deleteObj('date_block', bRecord.id); };
+        } else {
+          btn.classList.add('day-available', 'border', 'border-gray-200', 'bg-white');
+          btn.onclick = () => {
+             const motivo = prompt("Qual o motivo do bloqueio dessa data? (Aparecerá para o morador)", "Manutenção");
+             if(motivo !== null) {
+                window.dataSdk.create({ type: 'date_block', area: area, date: dateStr, message: motivo, created_at: new Date().toISOString() });
+             }
+          };
+        }
+        container.appendChild(btn);
+      }
+    }
+    
+    function changeBlockMonth(dir) { blockCalMonth += dir; if (blockCalMonth > 11) { blockCalMonth = 0; blockCalYear++; } if (blockCalMonth < 0) { blockCalMonth = 11; blockCalYear--; } renderBlockCalendar(); }
+    async function deleteObj(type, id) { const obj = getData(type).find(r => r.id === id); if(obj) await window.dataSdk.delete(obj); }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  </script>
+</body>
+</html>
