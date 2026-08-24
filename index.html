@@ -960,27 +960,62 @@
       }
     }
 
-    function renderBlockCalendar() {
-      const area = document.getElementById('block-area-select').value; const section = document.getElementById('block-calendar-section');
-      if (!area) { section.classList.add('hidden'); return; } section.classList.remove('hidden');
+  function renderBlockCalendar() {
+      const area = document.getElementById('block-area-select').value; 
+      const section = document.getElementById('block-calendar-section');
+      if (!area) { section.classList.add('hidden'); return; } 
+      section.classList.remove('hidden');
+      
       document.getElementById('block-cal-month-year').textContent = `${MONTHS[blockCalMonth]} ${blockCalYear}`;
-      const container = document.getElementById('block-cal-days'); container.innerHTML = '';
-      const firstDay = new Date(blockCalYear, blockCalMonth, 1).getDay(); const daysInMonth = new Date(blockCalYear, blockCalMonth + 1, 0).getDate();
-      const blockedSet = new Set(); getDateBlocks().filter(b => b.area === area).forEach(b => { if (b.date) blockedSet.add(b.date); });
+      const container = document.getElementById('block-cal-days'); 
+      container.innerHTML = '';
+      
+      const firstDay = new Date(blockCalYear, blockCalMonth, 1).getDay(); 
+      const daysInMonth = new Date(blockCalYear, blockCalMonth + 1, 0).getDate();
+      
+      const blockedSet = new Set(); 
+      getDateBlocks().filter(b => b.area === area).forEach(b => { if (b.date) blockedSet.add(b.date); });
 
       for (let i = 0; i < firstDay; i++) container.appendChild(document.createElement('span'));
+      
       for (let d = 1; d <= daysInMonth; d++) {
-        const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = d; btn.className = 'day-btn';
+        const btn = document.createElement('button'); 
+        btn.type = 'button'; 
+        btn.textContent = d; 
+        btn.className = 'day-btn py-2 rounded-lg text-sm font-bold transition-all';
+        
         const dateStr = `${blockCalYear}-${String(blockCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        
         if (blockedSet.has(dateStr)) {
-          btn.classList.add('day-sindico-blocked', 'ring-2', 'ring-offset-1', 'ring-musgo');
-          btn.onclick = () => { const bRecord = getDateBlocks().find(b => b.area === area && b.date === dateStr); if(bRecord) deleteObj('date_block', bRecord.id); };
+          btn.classList.add('day-sindico-blocked', 'ring-2', 'ring-offset-1', 'ring-musgo', 'bg-red-500', 'text-white');
+          btn.onclick = async () => { 
+            const bRecord = getDateBlocks().find(b => b.area === area && b.date === dateStr); 
+            if(bRecord) {
+              const result = await window.dataSdk.delete({ type: 'date_block', id: bRecord.id });
+              if (result.isOk) {
+                showToast('Data desbloqueada com sucesso!');
+              } else {
+                showToast('Erro ao desbloquear data.', true);
+              }
+            } 
+          };
         } else {
-          btn.classList.add('day-available', 'border', 'border-gray-200', 'bg-white');
-          btn.onclick = () => {
+          btn.classList.add('day-available', 'border', 'border-gray-200', 'bg-white', 'text-marrom');
+          btn.onclick = async () => {
              const motivo = prompt("Qual o motivo do bloqueio dessa data? (Aparecerá para o morador)", "Manutenção");
              if(motivo !== null) {
-                window.dataSdk.create({ type: 'date_block', area: area, date: dateStr, message: motivo, created_at: new Date().toISOString() });
+                const result = await window.dataSdk.create({ 
+                  type: 'date_block', 
+                  area: area, 
+                  date: dateStr, 
+                  message: motivo, 
+                  created_at: new Date().toISOString() 
+                });
+                if (result.isOk) {
+                  showToast('Data bloqueada com sucesso!');
+                } else {
+                  showToast('Erro ao gravar bloqueio.', true);
+                }
              }
           };
         }
