@@ -105,6 +105,13 @@
             <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">E-mail</label>
             <input type="email" id="email" placeholder="seu@email.com" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
           </div>
+          
+          <!-- NOVO CAMPO: CONFIRMAR E-MAIL (Oculto no login) -->
+          <div id="confirmEmailField" class="hidden">
+            <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Confirmar E-mail</label>
+            <input type="email" id="confirmEmail" placeholder="Digite o e-mail novamente" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
+          </div>
+
           <div>
             <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Senha</label>
             <input type="password" id="password" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
@@ -401,7 +408,11 @@
       document.getElementById('authTitle').innerText = isLoginMode ? 'Acessar Sistema' : 'Nova Conta';
       document.getElementById('authSubtitle').innerText = isLoginMode ? 'Gerencie suas reservas no condomínio' : 'Registre-se como morador ou síndico';
       document.getElementById('authBtn').innerText = isLoginMode ? 'Entrar' : 'Confirmar Cadastro';
+      
       document.getElementById('registerFields').classList.toggle('hidden', isLoginMode);
+      // ALTERAÇÃO: Mostra/Oculta o campo de confirmar e-mail junto com o modo de cadastro
+      document.getElementById('confirmEmailField').classList.toggle('hidden', isLoginMode);
+
       document.getElementById('toggleText').innerHTML = isLoginMode ? 
         'Não tem conta? <button onclick="toggleAuthMode()" class="text-musgo font-bold hover:underline">Cadastre-se</button>' : 
         'Já tem conta? <button onclick="toggleAuthMode()" class="text-musgo font-bold hover:underline">Fazer Login</button>';
@@ -426,6 +437,17 @@
           const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
           if (error) { showToast('Erro ao entrar: ' + error.message, true); btn.disabled = false; btn.innerText = 'Entrar'; }
         } else {
+          
+          // --- INÍCIO DA VALIDAÇÃO DE E-MAIL ---
+          const confirmEmail = document.getElementById('confirmEmail').value.trim();
+          
+          if (email !== confirmEmail) {
+            showToast('Os e-mails não coincidem. Verifique a digitação.', true);
+            btn.disabled = false; btn.innerText = 'Confirmar Cadastro';
+            return;
+          }
+          // --- FIM DA VALIDAÇÃO DE E-MAIL ---
+
           const name = document.getElementById('regName').value.trim();
           const unit = document.getElementById('regUnit').value.trim();
           const role = document.getElementById('roleSelect').value;
