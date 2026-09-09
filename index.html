@@ -384,6 +384,9 @@
     let currentResident = null;
     let allProfiles = []; 
 
+    // TRAVA DE SEGURANÇA PARA A SENHA
+    let isRecoveringPassword = false;
+
     // ==========================================
     // ANIMAÇÃO DE NAVEGAÇÃO DA CAPA
     // ==========================================
@@ -597,10 +600,12 @@
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        isRecoveringPassword = true; // Ativa a trava de segurança
         showRecoveryForm();
-      } else if (session) { 
+      } else if (session && !isRecoveringPassword) { 
+        // O app só carrega normalmente se NÃO estivermos no meio de trocar a senha
         initApp(session); 
-      } else {
+      } else if (!session && !isRecoveringPassword) {
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('app-header').classList.add('hidden');
         document.getElementById('main-app').classList.add('hidden');
@@ -741,7 +746,6 @@
 
     let isNotificationsOpen = false;
 
-    // Função de clique no quadro de avisos modificada para remover a animação do sininho
     function toggleNotifications() {
       isNotificationsOpen = !isNotificationsOpen;
       const content = document.getElementById('notifications-content');
@@ -751,9 +755,9 @@
       content.classList.toggle('hidden', !isNotificationsOpen);
       arrow.style.transform = isNotificationsOpen ? 'rotate(180deg)' : 'rotate(0deg)';
       
-      // Remove a animação visual quando o painel é aberto
-      if (isNotificationsOpen) {
-        iconBell.classList.remove('animate-bounce', 'animate-pulse');
+      // Ao abrir o painel, removemos a classe de animação que faz o sino pular
+      if (isNotificationsOpen && iconBell) {
+        iconBell.classList.remove('animate-bounce');
       }
     }
 
@@ -782,17 +786,28 @@
       
       const hasImportant = notifs.some(n => n.is_important);
       
-      // Adiciona a classe animate-bounce caso o quadro esteja fechado
-      const animationClass = !isNotificationsOpen ? ' animate-bounce' : '';
-      
+      // Limpa cores anteriores usando classList, porque SVG não aceita setar .className direto no HTML facilmente
+      if (iconBell) {
+          iconBell.classList.remove('text-white', 'text-marrom', 'animate-bounce');
+          
+          if (hasImportant) {
+            iconBell.classList.add('text-white');
+          } else {
+            iconBell.classList.add('text-marrom');
+          }
+          
+          // Adiciona a animação apenas se o quadro estiver fechado e houver novos avisos
+          if (!isNotificationsOpen) {
+            iconBell.classList.add('animate-bounce');
+          }
+      }
+
       if (hasImportant) {
         headerBtn.className = "w-full p-4 flex items-center justify-between font-bold transition-colors text-left bg-red-500 text-white hover:bg-red-600";
-        iconBell.className = "w-5 h-5 text-white" + animationClass;
         badge.classList.remove('hidden');
         badge.innerText = 'Importante';
       } else {
         headerBtn.className = "w-full p-4 flex items-center justify-between font-bold transition-colors text-left bg-amarelo text-marrom hover:bg-yellow-500";
-        iconBell.className = "w-5 h-5 text-marrom" + animationClass;
         badge.classList.remove('hidden');
         badge.innerText = `${notifs.length} novo(s)`;
       }
