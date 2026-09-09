@@ -106,7 +106,6 @@
             <input type="email" id="email" placeholder="seu@email.com" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
           </div>
           
-          <!-- NOVO CAMPO: CONFIRMAR E-MAIL (Oculto no login) -->
           <div id="confirmEmailField" class="hidden">
             <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Confirmar E-mail</label>
             <input type="email" id="confirmEmail" placeholder="Digite o e-mail novamente" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
@@ -122,7 +121,22 @@
           </button>
         </div>
 
-        <div class="mt-8 text-center text-sm border-t pt-6">
+        <!-- FORMULÁRIO DE RECUPERAÇÃO DE SENHA -->
+        <div id="recoveryForm" class="hidden space-y-5">
+          <div>
+            <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Nova Senha</label>
+            <input type="password" id="newPassword" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-marrom mb-1 uppercase tracking-wide">Confirmar Nova Senha</label>
+            <input type="password" id="confirmNewPassword" placeholder="••••••••" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-amarelo outline-none">
+          </div>
+          <button id="savePasswordBtn" onclick="saveNewPassword()" class="w-full py-3.5 rounded-lg font-bold text-marrom bg-amarelo hover:bg-yellow-500 shadow-md transition-colors text-lg">
+            Salvar Nova Senha
+          </button>
+        </div>
+
+        <div id="footerAuth" class="mt-8 text-center text-sm border-t pt-6">
           <p id="toggleText" class="text-gray-600">
             Não tem conta? <button onclick="toggleAuthMode()" class="text-musgo font-bold hover:underline">Cadastre-se</button>
           </p>
@@ -371,7 +385,7 @@
     let allProfiles = []; 
 
     // ==========================================
-    // ANIMAÇÃO DE NAVEGAÇÃO DA CAPA (NOVO)
+    // ANIMAÇÃO DE NAVEGAÇÃO DA CAPA
     // ==========================================
     function showLoginCard() {
       const splash = document.getElementById('splash-content');
@@ -392,7 +406,7 @@
     }
 
     // ==========================================
-    // ALERTAS FLUTUANTES (TOAST 5 SEGUNDOS)
+    // ALERTAS FLUTUANTES (TOAST)
     // ==========================================
     function showToast(msg, isError = false) {
       const toast = document.createElement('div');
@@ -410,7 +424,6 @@
       document.getElementById('authBtn').innerText = isLoginMode ? 'Entrar' : 'Confirmar Cadastro';
       
       document.getElementById('registerFields').classList.toggle('hidden', isLoginMode);
-      // ALTERAÇÃO: Mostra/Oculta o campo de confirmar e-mail junto com o modo de cadastro
       document.getElementById('confirmEmailField').classList.toggle('hidden', isLoginMode);
 
       document.getElementById('toggleText').innerHTML = isLoginMode ? 
@@ -437,8 +450,6 @@
           const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
           if (error) { showToast('Erro ao entrar: ' + error.message, true); btn.disabled = false; btn.innerText = 'Entrar'; }
         } else {
-          
-          // --- INÍCIO DA VALIDAÇÃO DE E-MAIL ---
           const confirmEmail = document.getElementById('confirmEmail').value.trim();
           
           if (email !== confirmEmail) {
@@ -446,7 +457,6 @@
             btn.disabled = false; btn.innerText = 'Confirmar Cadastro';
             return;
           }
-          // --- FIM DA VALIDAÇÃO DE E-MAIL ---
 
           const name = document.getElementById('regName').value.trim();
           const unit = document.getElementById('regUnit').value.trim();
@@ -456,7 +466,6 @@
           if (!name || !unit) { showToast('Preencha Bloco/Nome e Apartamento.', true); btn.disabled = false; btn.innerText = 'Confirmar Cadastro'; return; }
           if (role === 'sindico' && secret !== 'CONDOMINIO2026') { showToast('Código de síndico inválido!', true); btn.disabled = false; btn.innerText = 'Confirmar Cadastro'; return; }
 
-          // Validação de Morador na Planilha (allowed_residents)
           if (role === 'morador') {
             const { data: authorizedList, error: authErr } = await supabaseClient
               .from('allowed_residents')
@@ -504,6 +513,45 @@
       if (error) showToast(error.message, true); else showToast('E-mail de recuperação enviado!');
     }
 
+    function showRecoveryForm() {
+      document.getElementById('auth-screen').classList.remove('hidden');
+      document.getElementById('app-header').classList.add('hidden');
+      document.getElementById('main-app').classList.add('hidden');
+      
+      showLoginCard();
+      
+      document.getElementById('authForm').classList.add('hidden');
+      document.getElementById('footerAuth').classList.add('hidden');
+      document.getElementById('recoveryForm').classList.remove('hidden');
+      
+      document.getElementById('authTitle').innerText = 'Nova Senha';
+      document.getElementById('authSubtitle').innerText = 'Crie uma nova senha para sua conta';
+    }
+
+    async function saveNewPassword() {
+      const newPass = document.getElementById('newPassword').value;
+      const confPass = document.getElementById('confirmNewPassword').value;
+      const btn = document.getElementById('savePasswordBtn');
+
+      if (!newPass || !confPass) { showToast('Preencha os dois campos.', true); return; }
+      if (newPass.length < 6) { showToast('A senha precisa ter pelo menos 6 caracteres.', true); return; }
+      if (newPass !== confPass) { showToast('As senhas não coincidem.', true); return; }
+
+      btn.disabled = true;
+      btn.innerText = 'Salvando...';
+
+      const { error } = await supabaseClient.auth.updateUser({ password: newPass });
+
+      if (error) {
+        showToast('Erro ao atualizar: ' + error.message, true);
+        btn.disabled = false;
+        btn.innerText = 'Salvar Nova Senha';
+      } else {
+        showToast('Senha atualizada com sucesso! Carregando sistema...');
+        setTimeout(() => { window.location.reload(); }, 2000);
+      }
+    }
+
     async function logout() { await supabaseClient.auth.signOut(); window.location.reload(); }
 
     async function initApp(session) {
@@ -548,7 +596,11 @@
     }
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
-      if (session) { initApp(session); } else {
+      if (event === 'PASSWORD_RECOVERY') {
+        showRecoveryForm();
+      } else if (session) { 
+        initApp(session); 
+      } else {
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('app-header').classList.add('hidden');
         document.getElementById('main-app').classList.add('hidden');
@@ -689,13 +741,20 @@
 
     let isNotificationsOpen = false;
 
+    // Função de clique no quadro de avisos modificada para remover a animação do sininho
     function toggleNotifications() {
       isNotificationsOpen = !isNotificationsOpen;
       const content = document.getElementById('notifications-content');
       const arrow = document.getElementById('notif-arrow');
+      const iconBell = document.getElementById('notif-icon-bell');
       
       content.classList.toggle('hidden', !isNotificationsOpen);
       arrow.style.transform = isNotificationsOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+      
+      // Remove a animação visual quando o painel é aberto
+      if (isNotificationsOpen) {
+        iconBell.classList.remove('animate-bounce', 'animate-pulse');
+      }
     }
 
     function renderMoradorNotifications() {
@@ -703,7 +762,6 @@
       const list = document.getElementById('notifications-list');
       const headerBtn = document.getElementById('notifications-header-btn');
       const badge = document.getElementById('notif-badge');
-      const titleText = document.getElementById('notif-title-text');
       const iconBell = document.getElementById('notif-icon-bell');
       
       const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
@@ -724,14 +782,17 @@
       
       const hasImportant = notifs.some(n => n.is_important);
       
+      // Adiciona a classe animate-bounce caso o quadro esteja fechado
+      const animationClass = !isNotificationsOpen ? ' animate-bounce' : '';
+      
       if (hasImportant) {
         headerBtn.className = "w-full p-4 flex items-center justify-between font-bold transition-colors text-left bg-red-500 text-white hover:bg-red-600";
-        iconBell.className = "w-5 h-5 text-white animate-bounce";
+        iconBell.className = "w-5 h-5 text-white" + animationClass;
         badge.classList.remove('hidden');
         badge.innerText = 'Importante';
       } else {
         headerBtn.className = "w-full p-4 flex items-center justify-between font-bold transition-colors text-left bg-amarelo text-marrom hover:bg-yellow-500";
-        iconBell.className = "w-5 h-5 text-marrom";
+        iconBell.className = "w-5 h-5 text-marrom" + animationClass;
         badge.classList.remove('hidden');
         badge.innerText = `${notifs.length} novo(s)`;
       }
