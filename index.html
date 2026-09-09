@@ -384,8 +384,14 @@
     let currentResident = null;
     let allProfiles = []; 
 
-    // TRAVA DE SEGURANÇA PARA A SENHA
     let isRecoveringPassword = false;
+
+    if (window.location.hash.includes('type=recovery') || window.location.hash.includes('access_token')) {
+      isRecoveringPassword = true;
+      window.addEventListener('DOMContentLoaded', () => {
+        showRecoveryForm();
+      });
+    }
 
     // ==========================================
     // ANIMAÇÃO DE NAVEGAÇÃO DA CAPA
@@ -517,6 +523,7 @@
     }
 
     function showRecoveryForm() {
+      isRecoveringPassword = true;
       document.getElementById('auth-screen').classList.remove('hidden');
       document.getElementById('app-header').classList.add('hidden');
       document.getElementById('main-app').classList.add('hidden');
@@ -551,7 +558,10 @@
         btn.innerText = 'Salvar Nova Senha';
       } else {
         showToast('Senha atualizada com sucesso! Carregando sistema...');
-        setTimeout(() => { window.location.reload(); }, 2000);
+        setTimeout(() => { 
+          window.location.hash = '';
+          window.location.reload(); 
+        }, 2000);
       }
     }
 
@@ -600,10 +610,9 @@
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-        isRecoveringPassword = true; // Ativa a trava de segurança
+        isRecoveringPassword = true;
         showRecoveryForm();
       } else if (session && !isRecoveringPassword) { 
-        // O app só carrega normalmente se NÃO estivermos no meio de trocar a senha
         initApp(session); 
       } else if (!session && !isRecoveringPassword) {
         document.getElementById('auth-screen').classList.remove('hidden');
@@ -755,7 +764,6 @@
       content.classList.toggle('hidden', !isNotificationsOpen);
       arrow.style.transform = isNotificationsOpen ? 'rotate(180deg)' : 'rotate(0deg)';
       
-      // Ao abrir o painel, removemos a classe de animação que faz o sino pular
       if (isNotificationsOpen && iconBell) {
         iconBell.classList.remove('animate-bounce');
       }
@@ -768,16 +776,22 @@
       const badge = document.getElementById('notif-badge');
       const iconBell = document.getElementById('notif-icon-bell');
       
+      if (!currentResident) return;
       const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
       
+      // Filtra apenas avisos que são para ele e que ELE AINDA NÃO DISPENSOU (clicou no X)
       const notifs = getNotifications().filter(n => {
         const isForMe = !n.target || n.target === 'all' || n.target === myIdStr;
         const isDismissed = n.dismissed_by && n.dismissed_by.includes(`[${myIdStr}]`);
         return isForMe && !isDismissed;
       });
 
+      // Se não houver mensagens pendentes/não lidas, esconde a seção e para o sino
       if (!notifs.length) { 
         section.classList.add('hidden'); 
+        if (iconBell) {
+          iconBell.classList.remove('animate-bounce');
+        }
         return; 
       }
       
@@ -786,7 +800,6 @@
       
       const hasImportant = notifs.some(n => n.is_important);
       
-      // Limpa cores anteriores usando classList, porque SVG não aceita setar .className direto no HTML facilmente
       if (iconBell) {
           iconBell.classList.remove('text-white', 'text-marrom', 'animate-bounce');
           
@@ -796,7 +809,7 @@
             iconBell.classList.add('text-marrom');
           }
           
-          // Adiciona a animação apenas se o quadro estiver fechado e houver novos avisos
+          // Só faz pular se houver mensagens ativas E o quadro estiver fechado
           if (!isNotificationsOpen) {
             iconBell.classList.add('animate-bounce');
           }
