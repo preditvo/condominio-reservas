@@ -200,13 +200,49 @@
             <p id="no-my-reservations" class="text-gray-400 text-center py-6 text-sm italic bg-gray-50 rounded-lg">Você não possui reservas futuras.</p>
           </div>
 
-          <!-- Regras -->
-          <div class="bg-musgo text-white rounded-xl shadow-sm p-5">
-            <h3 class="font-bold flex items-center gap-2 mb-3"><i data-lucide="info" class="w-5 h-5 text-amarelo"></i> Regras de Uso</h3>
-            <ul class="text-sm space-y-2 text-gray-100">
-              <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> Entregue o ambiente limpo.</li>
-              <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> Desligue luzes e freezer.</li>
-              <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> Tranque portões após o uso.</li>
+          <!-- ================= REGRAS E CUIDADOS ================= -->
+          <div class="bg-musgo text-white rounded-xl shadow-sm p-5 space-y-3">
+            <h3 class="font-bold flex items-center gap-2 border-b border-white/20 pb-2">
+              <i data-lucide="info" class="w-5 h-5 text-amarelo"></i> Cuidados e Regras de Uso
+            </h3>
+
+            <!-- Destaque de Atenção (Som e Resíduos) -->
+            <div class="bg-amarelo/20 border border-amarelo/40 rounded-lg p-3 text-xs space-y-1.5 text-yellow-100">
+              <p class="font-bold text-amarelo flex items-center gap-1.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i> ATENÇÃO COM O VOLUME DO SOM:
+              </p>
+              <p>Principalmente após as 22:00.</p>
+              <p class="font-bold text-amarelo flex items-center gap-1.5 pt-1">
+                <i data-lucide="trash-2" class="w-4 h-4 shrink-0"></i> RESÍDUOS / LIXO (Área Comum e Campo):
+              </p>
+              <p>Todo resíduo gerado deve ser retirado pelo usuário e destinado para os recipientes fora do residencial (NÃO é para deixar nos tambores).</p>
+            </div>
+
+            <ul class="text-sm space-y-2 text-gray-100 pt-1">
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> 
+                <span>Todo o ambiente deve ser entregue limpo.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> 
+                <span>A grelha da churrasqueira deve ser entregue limpa.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> 
+                <span>Freezer e geladeira devem ser desligados e manter as portas abertas.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> 
+                <span>Certificar que todas as luzes foram apagadas, inclusive as de fora.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> 
+                <span>Após o uso da quadra as luzes devem ser apagadas.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-amarelo shrink-0 mt-0.5"></i> 
+                <span>Todas as portas e portões devem ser trancados.</span>
+              </li>
             </ul>
           </div>
         </div>
@@ -385,8 +421,6 @@
     let allProfiles = []; 
 
     let isRecoveringPassword = false;
-
-    // Rastreamento para disparar som e alerta SOMENTE quando chegar mensagem nova
     let initialLoadDone = false;
 
     if (window.location.hash.includes('type=recovery') || window.location.hash.includes('access_token')) {
@@ -433,7 +467,6 @@
     // ==========================================
     // GERENCIADOR DE STATUS NO LOCALSTORAGE
     // ==========================================
-    // Avisos que o morador já abriu para ler (não devem mais piscar nem tocar som)
     function getSeenNotifIds() {
       try {
         const item = localStorage.getItem('seen_notif_ids');
@@ -454,7 +487,6 @@
       } catch (e) {}
     }
 
-    // Avisos dispensados com clique no "X" (não aparecem mais no mural)
     function getDismissedNotifIds() {
       try {
         const item = localStorage.getItem('dismissed_notif_ids');
@@ -837,7 +869,6 @@
 
     let isNotificationsOpen = false;
 
-    // AO CLICAR NO QUADRO: abre a gaveta e DESATIVA O ALERTA (anota tudo como visto)
     function toggleNotifications() {
       isNotificationsOpen = !isNotificationsOpen;
       const content = document.getElementById('notifications-content');
@@ -850,12 +881,10 @@
       arrow.style.transform = isNotificationsOpen ? 'rotate(180deg)' : 'rotate(0deg)';
       
       if (isNotificationsOpen) {
-        // Desativa animações imediatamente
         if (iconBell) iconBell.classList.remove('animate-bounce');
         if (container) container.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
         if (badge) badge.classList.add('hidden');
 
-        // Marca todos os avisos atualmente carregados como "vistos" no localStorage
         if (currentResident) {
           const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
           const currentVisibleIds = getNotifications()
@@ -879,14 +908,12 @@
       const dismissedIds = getDismissedNotifIds();
       const seenIds = getSeenNotifIds();
       
-      // Avisos que ainda devem aparecer na lista (não foram dispensados no X)
       const notifs = getNotifications().filter(n => {
         const isForMe = !n.target || n.target === 'all' || n.target === myIdStr;
         const isDismissed = !n.is_important && dismissedIds.includes(String(n.id));
         return isForMe && !isDismissed;
       });
 
-      // Se não há nenhum aviso no banco/mural, oculta o bloco
       if (!notifs.length) { 
         section.classList.add('hidden'); 
         section.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
@@ -898,24 +925,20 @@
       section.classList.remove('hidden'); 
       list.innerHTML = '';
       
-      // MENSAGENS REALMENTE NOVAS = aquelas cujo ID ainda NÃO está no visto (seenIds)
       const unreadNotifs = notifs.filter(n => !seenIds.includes(String(n.id)));
       const hasUnread = unreadNotifs.length > 0;
       const hasImportant = notifs.some(n => n.is_important);
 
-      // Gatilho de som: toca somente se entrou aviso novo e o app já estava carregado
       if (initialLoadDone && hasUnread) {
         playNotificationChime();
       }
       initialLoadDone = true;
 
-      // Se o quadro estiver aberto, limpa as animações
       if (isNotificationsOpen) {
         section.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
         if (iconBell) iconBell.classList.remove('animate-bounce');
         if (badge) badge.classList.add('hidden');
       } else if (hasUnread) {
-        // SÓ PISCA E BALANÇA SE HOUVER MENSAGEM NÃO VISTA
         if (hasImportant) {
           section.classList.add('animate-pulse', 'ring-4', 'ring-red-400');
           section.classList.remove('ring-amarelo');
@@ -933,13 +956,11 @@
           badge.innerText = hasImportant ? 'Importante' : `${unreadNotifs.length} nova(s)`;
         }
       } else {
-        // Mensagens já foram vistas: o sino fica estático e sem piscar
         section.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
         if (iconBell) iconBell.classList.remove('animate-bounce');
         if (badge) badge.classList.add('hidden');
       }
 
-      // Estilo das cores do cabeçalho
       if (hasImportant) {
         headerBtn.className = "w-full p-4 flex items-center justify-between font-bold transition-colors text-left bg-red-500 text-white hover:bg-red-600";
         if (iconBell) iconBell.classList.add('text-white');
@@ -948,7 +969,6 @@
         if (iconBell) iconBell.classList.add('text-marrom');
       }
 
-      // Monta as mensagens
       [...notifs].sort((a,b) => (b.created_at||'').localeCompare(a.created_at||'')).forEach(n => {
         const div = document.createElement('div'); 
         div.className = 'bg-fundo rounded-lg p-3 text-sm border border-gray-200 relative';
@@ -1187,7 +1207,7 @@
       }
     }
 
-  function renderBlockCalendar() {
+    function renderBlockCalendar() {
       const area = document.getElementById('block-area-select').value; 
       const section = document.getElementById('block-calendar-section');
       if (!area) { section.classList.add('hidden'); return; } 
