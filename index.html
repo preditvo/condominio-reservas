@@ -386,11 +386,74 @@
 
     let isRecoveringPassword = false;
 
+    // Rastreamento para disparo de som apenas em novas mensagens
+    let lastKnownNotifCount = null;
+
     if (window.location.hash.includes('type=recovery') || window.location.hash.includes('access_token')) {
       isRecoveringPassword = true;
       window.addEventListener('DOMContentLoaded', () => {
         showRecoveryForm();
       });
+    }
+
+    // ==========================================
+    // ALERTA SONORO (Web Audio API nativa)
+    // ==========================================
+    function playNotificationChime() {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        
+        const now = ctx.currentTime;
+        
+        // Primeiro tom (suave)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, now); // D5
+        gain1.gain.setValueAtTime(0.15, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.35);
+
+        // Segundo tom (mais agudo)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880, now + 0.15); // A5
+        gain2.gain.setValueAtTime(0.18, now + 0.15);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.15);
+        osc2.stop(now + 0.6);
+      } catch (e) {}
+    }
+
+    // ==========================================
+    // GERENCIADOR DE AVISOS NO LOCALSTORAGE
+    // ==========================================
+    function getDismissedNotifIds() {
+      try {
+        const item = localStorage.getItem('dismissed_notif_ids');
+        return item ? JSON.parse(item) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function addDismissedNotifId(id) {
+      try {
+        const list = getDismissedNotifIds();
+        const strId = String(id);
+        if (!list.includes(strId)) {
+          list.push(strId);
+          localStorage.setItem('dismissed_notif_ids', JSON.stringify(list));
+        }
+      } catch (e) {}
     }
 
     // ==========================================
@@ -760,12 +823,15 @@
       const content = document.getElementById('notifications-content');
       const arrow = document.getElementById('notif-arrow');
       const iconBell = document.getElementById('notif-icon-bell');
+      const container = document.getElementById('notifications-morador');
       
       content.classList.toggle('hidden', !isNotificationsOpen);
       arrow.style.transform = isNotificationsOpen ? 'rotate(180deg)' : 'rotate(0deg)';
       
-      if (isNotificationsOpen && iconBell) {
-        iconBell.classList.remove('animate-bounce');
+      // Ao abrir o painel, desativa imediatamente os alertas visuais
+      if (isNotificationsOpen) {
+        if (iconBell) iconBell.classList.remove('animate-bounce');
+        if (container) container.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
       }
     }
 
@@ -776,30 +842,51 @@
       const badge = document.getElementById('notif-badge');
       const iconBell = document.getElementById('notif-icon-bell');
       
-      if (!currentResident) return;
+      if (!currentResident || currentResident.role !== 'morador') return;
       const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
+      const dismissedIds = getDismissedNotifIds();
       
-      // Filtra apenas avisos que são para ele e que ELE AINDA NÃO DISPENSOU (clicou no X)
+      // Filtra os avisos destinados ao morador e remove os que ele já dispensou localmente
       const notifs = getNotifications().filter(n => {
         const isForMe = !n.target || n.target === 'all' || n.target === myIdStr;
-        const isDismissed = n.dismissed_by && n.dismissed_by.includes(`[${myIdStr}]`);
-        return isForMe && !isDismissed;
+        // Mensagens importantes nunca são ignoradas pelo localStorage
+        const isDismissedLocal = !n.is_important && dismissedIds.includes(String(n.id));
+        return isForMe && !isDismissedLocal;
       });
 
-      // Se não houver mensagens pendentes/não lidas, esconde a seção e para o sino
+      // Se não há avisos pendentes, oculta o container e remove qualquer alerta visual
       if (!notifs.length) { 
         section.classList.add('hidden'); 
-        if (iconBell) {
-          iconBell.classList.remove('animate-bounce');
-        }
+        section.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
+        if (iconBell) iconBell.classList.remove('animate-bounce');
+        lastKnownNotifCount = 0;
         return; 
       }
       
+      // Alerta sonoro: dispara apenas se chegou uma mensagem nova que ainda não conhecíamos
+      if (lastKnownNotifCount !== null && notifs.length > lastKnownNotifCount) {
+        playNotificationChime();
+      }
+      lastKnownNotifCount = notifs.length;
+
       section.classList.remove('hidden'); 
       list.innerHTML = '';
       
       const hasImportant = notifs.some(n => n.is_important);
       
+      // Configuração dos alertas visuais caso o quadro esteja fechado
+      if (!isNotificationsOpen) {
+        if (hasImportant) {
+          section.classList.add('animate-pulse', 'ring-4', 'ring-red-400');
+          section.classList.remove('ring-amarelo');
+        } else {
+          section.classList.add('animate-pulse', 'ring-4', 'ring-amarelo');
+          section.classList.remove('ring-red-400');
+        }
+      } else {
+        section.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
+      }
+
       if (iconBell) {
           iconBell.classList.remove('text-white', 'text-marrom', 'animate-bounce');
           
@@ -809,7 +896,6 @@
             iconBell.classList.add('text-marrom');
           }
           
-          // Só faz pular se houver mensagens ativas E o quadro estiver fechado
           if (!isNotificationsOpen) {
             iconBell.classList.add('animate-bounce');
           }
@@ -840,36 +926,19 @@
       lucide.createIcons({root: section});
     }
 
-   async function deleteMoradorNotif(id, target) {
-      const n = getNotifications().find(x => String(x.id) === String(id));
+    async function deleteMoradorNotif(id, target) {
+      // Grava no localStorage para não depender do RLS do Supabase
+      addDismissedNotifId(id);
       
-      if(!n) {
-        showToast('Erro técnico: Mensagem não encontrada na memória.', true);
-        return;
+      // Se a mensagem for exclusiva do morador, tenta apagar do banco também
+      if (target && target !== 'all' && target !== 'undefined' && target !== 'null') {
+        try {
+          await window.dataSdk.delete({ type: 'notification', id: id });
+        } catch (e) {}
       }
       
-      if (!target || target === 'all' || target === 'undefined' || target === 'null') {
-        const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
-        
-        const result = await window.dataSdk.update({ 
-          type: 'notification', 
-          id: n.id, 
-          dismissed_by: (n.dismissed_by || '') + `[${myIdStr}]` 
-        });
-
-        if (result.isOk) {
-          showToast('Aviso ocultado do seu mural.');
-        } else {
-          showToast('Erro: O banco bloqueou a gravação. Verifique o RLS.', true);
-        }
-      } else {
-        const result = await window.dataSdk.delete({ type: 'notification', id: n.id });
-        if (result.isOk) {
-          showToast('Aviso apagado.', false);
-        } else {
-          showToast('Erro ao apagar aviso do banco.', true);
-        }
-      }
+      showToast('Aviso ocultado com sucesso.');
+      renderMoradorNotifications();
     }
 
     document.getElementById('morador-notification-form').addEventListener('submit', async (e) => {
