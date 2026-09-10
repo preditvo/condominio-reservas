@@ -386,8 +386,8 @@
 
     let isRecoveringPassword = false;
 
-    // Rastreamento para disparo de som apenas em novas mensagens
-    let lastKnownNotifCount = null;
+    // Rastreamento para disparar som e alerta SOMENTE quando chegar mensagem nova
+    let initialLoadDone = false;
 
     if (window.location.hash.includes('type=recovery') || window.location.hash.includes('access_token')) {
       isRecoveringPassword = true;
@@ -404,14 +404,12 @@
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         if (!AudioContext) return;
         const ctx = new AudioContext();
-        
         const now = ctx.currentTime;
         
-        // Primeiro tom (suave)
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(587.33, now); // D5
+        osc1.frequency.setValueAtTime(587.33, now); 
         gain1.gain.setValueAtTime(0.15, now);
         gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
         osc1.connect(gain1);
@@ -419,11 +417,10 @@
         osc1.start(now);
         osc1.stop(now + 0.35);
 
-        // Segundo tom (mais agudo)
         const osc2 = ctx.createOscillator();
         const gain2 = ctx.createGain();
         osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(880, now + 0.15); // A5
+        osc2.frequency.setValueAtTime(880, now + 0.15); 
         gain2.gain.setValueAtTime(0.18, now + 0.15);
         gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
         osc2.connect(gain2);
@@ -434,8 +431,30 @@
     }
 
     // ==========================================
-    // GERENCIADOR DE AVISOS NO LOCALSTORAGE
+    // GERENCIADOR DE STATUS NO LOCALSTORAGE
     // ==========================================
+    // Avisos que o morador já abriu para ler (não devem mais piscar nem tocar som)
+    function getSeenNotifIds() {
+      try {
+        const item = localStorage.getItem('seen_notif_ids');
+        return item ? JSON.parse(item) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function markAllAsSeen(ids) {
+      try {
+        const list = getSeenNotifIds();
+        ids.forEach(id => {
+          const s = String(id);
+          if (!list.includes(s)) list.push(s);
+        });
+        localStorage.setItem('seen_notif_ids', JSON.stringify(list));
+      } catch (e) {}
+    }
+
+    // Avisos dispensados com clique no "X" (não aparecem mais no mural)
     function getDismissedNotifIds() {
       try {
         const item = localStorage.getItem('dismissed_notif_ids');
@@ -818,20 +837,32 @@
 
     let isNotificationsOpen = false;
 
+    // AO CLICAR NO QUADRO: abre a gaveta e DESATIVA O ALERTA (anota tudo como visto)
     function toggleNotifications() {
       isNotificationsOpen = !isNotificationsOpen;
       const content = document.getElementById('notifications-content');
       const arrow = document.getElementById('notif-arrow');
       const iconBell = document.getElementById('notif-icon-bell');
       const container = document.getElementById('notifications-morador');
+      const badge = document.getElementById('notif-badge');
       
       content.classList.toggle('hidden', !isNotificationsOpen);
       arrow.style.transform = isNotificationsOpen ? 'rotate(180deg)' : 'rotate(0deg)';
       
-      // Ao abrir o painel, desativa imediatamente os alertas visuais
       if (isNotificationsOpen) {
+        // Desativa animações imediatamente
         if (iconBell) iconBell.classList.remove('animate-bounce');
         if (container) container.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
+        if (badge) badge.classList.add('hidden');
+
+        // Marca todos os avisos atualmente carregados como "vistos" no localStorage
+        if (currentResident) {
+          const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
+          const currentVisibleIds = getNotifications()
+            .filter(n => (!n.target || n.target === 'all' || n.target === myIdStr))
+            .map(n => n.id);
+          markAllAsSeen(currentVisibleIds);
+        }
       }
     }
 
@@ -844,38 +875,47 @@
       
       if (!currentResident || currentResident.role !== 'morador') return;
       const myIdStr = `${currentResident.name} - Ap. ${currentResident.unit}`;
-      const dismissedIds = getDismissedNotifIds();
       
-      // Filtra os avisos destinados ao morador e remove os que ele já dispensou localmente
+      const dismissedIds = getDismissedNotifIds();
+      const seenIds = getSeenNotifIds();
+      
+      // Avisos que ainda devem aparecer na lista (não foram dispensados no X)
       const notifs = getNotifications().filter(n => {
         const isForMe = !n.target || n.target === 'all' || n.target === myIdStr;
-        // Mensagens importantes nunca são ignoradas pelo localStorage
-        const isDismissedLocal = !n.is_important && dismissedIds.includes(String(n.id));
-        return isForMe && !isDismissedLocal;
+        const isDismissed = !n.is_important && dismissedIds.includes(String(n.id));
+        return isForMe && !isDismissed;
       });
 
-      // Se não há avisos pendentes, oculta o container e remove qualquer alerta visual
+      // Se não há nenhum aviso no banco/mural, oculta o bloco
       if (!notifs.length) { 
         section.classList.add('hidden'); 
         section.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
         if (iconBell) iconBell.classList.remove('animate-bounce');
-        lastKnownNotifCount = 0;
+        initialLoadDone = true;
         return; 
       }
       
-      // Alerta sonoro: dispara apenas se chegou uma mensagem nova que ainda não conhecíamos
-      if (lastKnownNotifCount !== null && notifs.length > lastKnownNotifCount) {
-        playNotificationChime();
-      }
-      lastKnownNotifCount = notifs.length;
-
       section.classList.remove('hidden'); 
       list.innerHTML = '';
       
+      // MENSAGENS REALMENTE NOVAS = aquelas cujo ID ainda NÃO está no visto (seenIds)
+      const unreadNotifs = notifs.filter(n => !seenIds.includes(String(n.id)));
+      const hasUnread = unreadNotifs.length > 0;
       const hasImportant = notifs.some(n => n.is_important);
-      
-      // Configuração dos alertas visuais caso o quadro esteja fechado
-      if (!isNotificationsOpen) {
+
+      // Gatilho de som: toca somente se entrou aviso novo e o app já estava carregado
+      if (initialLoadDone && hasUnread) {
+        playNotificationChime();
+      }
+      initialLoadDone = true;
+
+      // Se o quadro estiver aberto, limpa as animações
+      if (isNotificationsOpen) {
+        section.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
+        if (iconBell) iconBell.classList.remove('animate-bounce');
+        if (badge) badge.classList.add('hidden');
+      } else if (hasUnread) {
+        // SÓ PISCA E BALANÇA SE HOUVER MENSAGEM NÃO VISTA
         if (hasImportant) {
           section.classList.add('animate-pulse', 'ring-4', 'ring-red-400');
           section.classList.remove('ring-amarelo');
@@ -883,34 +923,32 @@
           section.classList.add('animate-pulse', 'ring-4', 'ring-amarelo');
           section.classList.remove('ring-red-400');
         }
+
+        if (iconBell) {
+          iconBell.classList.add('animate-bounce');
+        }
+
+        if (badge) {
+          badge.classList.remove('hidden');
+          badge.innerText = hasImportant ? 'Importante' : `${unreadNotifs.length} nova(s)`;
+        }
       } else {
+        // Mensagens já foram vistas: o sino fica estático e sem piscar
         section.classList.remove('animate-pulse', 'ring-4', 'ring-amarelo', 'ring-red-400');
+        if (iconBell) iconBell.classList.remove('animate-bounce');
+        if (badge) badge.classList.add('hidden');
       }
 
-      if (iconBell) {
-          iconBell.classList.remove('text-white', 'text-marrom', 'animate-bounce');
-          
-          if (hasImportant) {
-            iconBell.classList.add('text-white');
-          } else {
-            iconBell.classList.add('text-marrom');
-          }
-          
-          if (!isNotificationsOpen) {
-            iconBell.classList.add('animate-bounce');
-          }
-      }
-
+      // Estilo das cores do cabeçalho
       if (hasImportant) {
         headerBtn.className = "w-full p-4 flex items-center justify-between font-bold transition-colors text-left bg-red-500 text-white hover:bg-red-600";
-        badge.classList.remove('hidden');
-        badge.innerText = 'Importante';
+        if (iconBell) iconBell.classList.add('text-white');
       } else {
         headerBtn.className = "w-full p-4 flex items-center justify-between font-bold transition-colors text-left bg-amarelo text-marrom hover:bg-yellow-500";
-        badge.classList.remove('hidden');
-        badge.innerText = `${notifs.length} novo(s)`;
+        if (iconBell) iconBell.classList.add('text-marrom');
       }
 
+      // Monta as mensagens
       [...notifs].sort((a,b) => (b.created_at||'').localeCompare(a.created_at||'')).forEach(n => {
         const div = document.createElement('div'); 
         div.className = 'bg-fundo rounded-lg p-3 text-sm border border-gray-200 relative';
@@ -927,10 +965,8 @@
     }
 
     async function deleteMoradorNotif(id, target) {
-      // Grava no localStorage para não depender do RLS do Supabase
       addDismissedNotifId(id);
       
-      // Se a mensagem for exclusiva do morador, tenta apagar do banco também
       if (target && target !== 'all' && target !== 'undefined' && target !== 'null') {
         try {
           await window.dataSdk.delete({ type: 'notification', id: id });
